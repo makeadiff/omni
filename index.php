@@ -1,5 +1,6 @@
 <?php
 require 'common.php';
+require 'Omni.php';
 
 $all_groups = $sql->getById("SELECT id,name FROM `Group` WHERE group_type='normal' AND status='1' ORDER BY FIELD (type, 'executive','national','strat','fellow','volunteer')");
 $all_cancellation_reasons = array('in-volunteer-unavailable','in-volunteer-engaged','in-volunteer-unassigned','in-other','ext-children-out','ext-children-doing-chores','ext-children-have-events','ext-children-unwell','ext-other', 'any');
@@ -9,13 +10,13 @@ $param = new Parameters;
 // All
 $param->add("format", "select", "html", array('json','csv','html'));
 $param->add("data_type", "select", "volunteer", array('volunteer','student','class','center'));
-$param->add("display_header", "select", '1', array('Yes', 'No'));
+$param->add("display_header", "select", '1', array('Yes', 'No'), 'select', array('options' => array('No', 'Yes')));
 $param->add("type", "select", "list", array('list','count'));
 $param->add("action", 'submit', 'Generate', array(), 'button', array( 'class' => 'btn btn-primary'));
 
 // Common
 $param->add("city_id", "select", "0", $all_cities, 'select', array('options' => $all_cities), 'City.id');
-$param->add("center_id", "select", "0", array('Any'), 'select', array(), "Center.id");
+$param->add("center_id", "select", "0", array('Any'), 'select', array('options' => array('Any')), "Center.id");
 $param->add("sex", "select", "m", array('any','m','f'), 'select', array(), "%TABLE%.sex");
 
 // Volunteers
@@ -24,12 +25,12 @@ $param->add("group_id", "select", "0", array(), 'select', array('multiple' => 'm
 $param->add("joined_on", 'date', array('2015-04-01', '2016-03-31'), false, 'range', array(), 'User.joined_on');
 $param->add("left_on", 'date', array('2015-04-01', '2016-03-31'), false, 'range', array(), 'User.left_on');
 $param->add("credit", 'number', array('0', '3'), false, 'range', array(), 'User.credit_on');
-$param->add("name", "text", array(), false, 'text', array(), '%TABLE%.name');
-$param->add("email", "text", array(), false, 'text', array(), '%TABLE%.email');
-$param->add("phone", "text", array(), false, 'text', array(), '%TABLE%.phone');
+$param->add("name", "text", '', false, 'text', array(), '%TABLE%.name');
+$param->add("email", "text", '', false, 'text', array(), '%TABLE%.email');
+$param->add("phone", "text", '', false, 'text', array(), '%TABLE%.phone');
 
 // Students
-$param->add("grade", "select", "5", array('5','6','7','8','9','10'), 'range', array(), 'Level.grade');
+$param->add("grade", "select", "5", array('5','6','7','8','9','10'), 'select', array(), 'Level.grade');
 $param->add("batch_id");
 $param->add("level_id");
 
@@ -41,11 +42,24 @@ $param->add("class_type", "select", "happened", array('happened','projected','ca
 $param->add("cancelled_reason", "select", "any", $all_cancellation_reasons);
 
 if(isset($QUERY['action'])) {
-	$data = $param->get();
+	$data = $param->getChanged();
+	$all_params = $param->getAll();
 
 	$checks = array();
 
-	dump($data);
+	if(strtolower($all_params['data_type']) == 'student') $table = 'Student';
+	elseif(strtolower($all_params['data_type']) == 'class') $table = 'Class';
+	elseif((strtolower($all_params['data_type']) == 'user') or (strtolower($all_params['data_type']) == 'volunteer')) $table = 'User';
+	elseif(strtolower($all_params['data_type']) == 'center') $table = 'Center';
+
+	$omni = new Omni($table);
+
+	foreach ($data as $key => $value) {
+		$omni->setCondition($key, $value);
+	}
+	$result = $omni->get();
+
+	dump($result);
 
 
 	exit;
@@ -110,13 +124,36 @@ class Parameters {
 		}
 	}
 
-	function get() {
+	function getChanged() {
+		$returns = array();
+
+		foreach ($this->params as $key => $data) {
+			if($data['field_type'] == 'range') {
+				$default_from = $data['default_value'][0];
+				$default_to = $data['default_value'][1];
+
+				$from = $this->_getValue($key.'_from', $data, 'from');
+				$to = $this->_getValue($key.'_to', $data, 'to');
+
+				if($from != $default_from) $returns[$key.'_from'] = $from;
+				if($to != $default_to) $returns[$key.'_to'] = $to;
+
+			} else {
+				$value = $this->_getValue($key, $data);
+				if($value != $data['default_value']) $returns[$key] = $value;
+			}
+		}
+
+		return $returns;
+	}
+
+	function getAll() {
 		$returns = array();
 
 		foreach ($this->params as $key => $data) {
 			if($data['field_type'] == 'range') {
 				$returns[$key.'_from'] = $this->_getValue($key.'_from', $data, 'from');
-				$returns[$key.'_to'] = $this->_getValue($key.'_to', $data, 'from');
+				$returns[$key.'_to'] = $this->_getValue($key.'_to', $data, 'to');
 
 			} else {
 				$returns[$key] = $this->_getValue($key, $data);
