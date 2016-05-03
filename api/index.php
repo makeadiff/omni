@@ -19,7 +19,7 @@ $api->request("/user/search", function () {
 
 	$omni->getFields('id', 'name', 'email', 'phone', 'joined_on', 'address');
 
-	$allowed_fields_for_search = array('name','email','phone','city_id', 'user_type'); // :TODO: Add more
+	$allowed_fields_for_search = array('name','email','phone','city_id', 'user_type', 'vertical_id'); // :TODO: Add more
 
 	foreach($QUERY as $key => $value) {
 		if(in_array($key, $allowed_fields_for_search)) {
@@ -31,12 +31,19 @@ $api->request("/user/search", function () {
 		}
 	}
 
-	//DBTable::$mode = 'd';
-	$limit = i($QUERY, 'limit', 100);
-	$offset = i($QUERY, 'offset', 0);
-	$omni->limit($limit, $offset);
-	$return = $omni->get();
-	
+	// DBTable::$mode = 'd';
+	// $limit = i($QUERY, 'limit', 100);
+	// $offset = i($QUERY, 'offset', 0);
+	// $omni->limit($limit, $offset);
+
+	$return_type = i($QUERY, 'return_type', 'list');
+	$return_format = 'all';
+	if($return_type == 'count') {
+		$omni->setReturnType($return_type);
+		$return_format = 'one';
+	}
+
+	$return = $omni->get($return_format);
 
 	showSuccess("Data fetched.", array('data' => $return));
 });

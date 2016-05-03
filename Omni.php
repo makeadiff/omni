@@ -32,6 +32,8 @@ class Omni {
 	public $year = 2015;
 
 	private $_table;
+	private $_joined_tables;
+	private $_return_type = 'list';
 
 	function __construct($type = 'User') {
 		if($type == 'User' or $type == 'Student' or $type == 'Class' or $type == 'Center') {
@@ -68,6 +70,13 @@ class Omni {
 		else $this->_error("Both arguments of limit($limit, $offset) should be numeric.");
 	}
 
+	function setReturnType($return_type) {
+		$this->_return_type = $return_type;
+		if($return_type == 'count') {
+			$this->dbtable->select("COUNT(" . $this->_table . ".id) AS count");
+		}
+	}
+
 
 
 	/**
@@ -78,10 +87,14 @@ class Omni {
 	 *			$omni->setCondition('sex="m"');
 	 */
 	function setCondition($name, $condition = '') {
+		$name = $this->_customJoins($name);
+
 		if($condition) $this->dbtable->where(array($this->_getField($name) => $condition));
 		else $this->dbtable->where($name);
 	}
 	function setConditionAny($name, $possibile_values) {
+		$name = $this->_customJoins($name);
+
 		$conditions = array();
 		foreach ($possibile_values as $value) {
 			$conditions[] = "`$name` = '$value'";
@@ -93,6 +106,16 @@ class Omni {
 		$this->dbtable->where(func_get_args());
 	}
 
+
+	function _customJoins($name) {
+		if($name == 'vertical_id') {
+			$this->_connectTable('Group');
+			return '`Group`.`vertical_id`';
+		}
+
+		return $name;
+	}
+
 	function _getField($key) {
 		if(strpos($key, ".") === false and strpos($key, ' ') === false and strpos($key, '`') === false) {
 			$key = "`$this->_table`.`$key`";
@@ -102,17 +125,28 @@ class Omni {
 	}
 
 	function _connectTable($far_table) {
-		if($this->_table == 'User') {
-			if($far_table == 'Center' or $far_table == 'Batch' or $far_table == 'Level')
-			$this->dbtable->join("UserBatch", "User.id = UserBatch.user_id");
+		// This makes sure we are not joining the tables multile times.
+		if(isset($this->_joined_tables[$far_table])) return; 
+		$this->_joined_tables[$far_table] = true;
 
-			if($far_table == 'Level') {
-				$this->dbtable->join("Level", "Level.id = UserBatch.level_id");
-				if($this->year) $this->dbtable->where("Level.year = $this->year");
+		if($this->_table == 'User') {
+			if($far_table == 'Group') {
+				$this->dbtable->join('UserGroup', 'User.id = UserGroup.user_id');
+				if($this->year) $this->dbtable->where("UserGroup.year = $this->year");
+				$this->dbtable->join('`Group`', 'Group.id = UserGroup.group_id');
+
 			} else {
-				$this->dbtable->join("Batch", "Batch.id = UserBatch.batch_id");
-				if($this->year) $this->dbtable->where("Batch.year = $this->year");
-				if($far_table == 'Center') $this->dbtable->join("Center", "Center.id = Batch.center_id");
+				if($far_table == 'Center' or $far_table == 'Batch' or $far_table == 'Level')
+					$this->dbtable->join("UserBatch", "User.id = UserBatch.user_id");
+
+				if($far_table == 'Level') {
+					$this->dbtable->join("Level", "Level.id = UserBatch.level_id");
+					if($this->year) $this->dbtable->where("Level.year = $this->year");
+				} else {
+					$this->dbtable->join("Batch", "Batch.id = UserBatch.batch_id");
+					if($this->year) $this->dbtable->where("Batch.year = $this->year");
+					if($far_table == 'Center') $this->dbtable->join("Center", "Center.id = Batch.center_id");
+				}
 			}
 		}
 	}
